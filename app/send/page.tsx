@@ -1,27 +1,30 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import EmergencyTransferModal from './components/EmergencyTransferModal'
+import { useState } from "react";
+import EmergencyTransferModal from "./components/EmergencyTransferModal";
 
-import Link from 'next/link'
-import { ArrowLeft, Send, AlertCircle } from 'lucide-react'
-import AutomaticSplitCard from './components/AutomaticSplitCard'
-import SendHeader from './components/SendHeader'
+import Link from "next/link";
+import { ArrowLeft, Send, AlertCircle } from "lucide-react";
+import AutomaticSplitCard from "./components/AutomaticSplitCard";
+import SendHeader from "./components/SendHeader";
 
 export default function SendMoney() {
-  const [showEmergencyModal, setShowEmergencyModal] = useState(false)
+  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <SendHeader />
-    
+
       <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="bg-[#141414] rounded-xl shadow-md p-8">
           <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Send Money to Family</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">
+              Send Money to Family
+            </h2>
             <p className="text-gray-600">
-              Send remittance via Stellar network. Funds will be automatically split according to your configuration.
+              Send remittance via Stellar network. Funds will be automatically
+              split according to your configuration.
             </p>
           </div>
 
@@ -95,9 +98,12 @@ export default function SendMoney() {
 
           {/* Emergency Mode */}
           <div className="mt-8 pt-8 border-t border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Emergency Transfer</h3>
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Emergency Transfer
+            </h3>
             <p className="text-gray-600 mb-4">
-              Need to send money urgently? Use emergency mode for priority processing.
+              Need to send money urgently? Use emergency mode for priority
+              processing.
             </p>
             <button
               className="bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
@@ -108,15 +114,12 @@ export default function SendMoney() {
           </div>
         </div>
 
-
-
         {/* emergency transfer modal */}
         <EmergencyTransferModal
-  open={showEmergencyModal}
-  onClose={() => setShowEmergencyModal(false)}
-/>
+          open={showEmergencyModal}
+          onClose={() => setShowEmergencyModal(false)}
+        />
       </main>
     </div>
-  )
+  );
 }
-
