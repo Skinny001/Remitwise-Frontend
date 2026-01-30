@@ -14,6 +14,7 @@ import FAQSection from "@/components/FAQSection";
 import FeatureSection from "@/components/FeatureSection";
 import WalletDropdown from "@/components/WalletDropdown";
 import WhyChooseStellar from "@/components/WhyChooseStellar";
+import Hero from "@/components/Hero";
 
 export default function Home() {
   const [isWalletDropdownOpen, setIsWalletDropdownOpen] = useState(false);
@@ -74,75 +75,7 @@ export default function Home() {
 
 
       {/* Hero Section */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="text-center mb-12">
-          <h2 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-            Smart Remittance & Financial Planning
-          </h2>
-          <p className="text-xl text-gray-600 max-w-2xl mx-auto">
-            Help families save, plan, and protect — not just send money. Built
-            on Stellar for fast, low-cost cross-border payments.
-          </p>
-        </div>
-
-        {/* Highlight Feature Cards - Instant Remittance & Smart Allocation */}
-        <div className="bg-[#0a0a0a] rounded-3xl p-6 mb-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <HighlightCard
-              icon={<Send className="w-6 h-6" />}
-              title="Instant Remittance"
-              description="Send money across borders in seconds with minimal fees. Our Stellar-powered infrastructure ensures your transfers are fast, secure, and transparent."
-            />
-            <HighlightCard
-              icon={<PiggyBank className="w-6 h-6" />}
-              title="Smart Allocation"
-              description="Automatically split remittances into spending, savings, bills, and insurance. Configure once and every transfer follows your rules automatically."
-            />
-          </div>
-        </div>
-
-        {/* Dark Feature Cards */}
-        <FeatureSection />
-
-        {/* Why Choose Stellar Section */}
-        <WhyChooseStellar />
-
-        {/* Quick Actions */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          <h3 className="text-2xl font-bold text-gray-900 mb-6">
-            Quick Actions
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Link
-              href="/send"
-              className="bg-blue-600 text-white p-6 rounded-lg hover:bg-blue-700 transition"
-            >
-              <div className="font-semibold text-lg mb-2">Send Remittance</div>
-              <div className="text-blue-100 text-sm">
-                Send money to family with smart allocation
-              </div>
-            </Link>
-            <Link
-              href="/split"
-              className="bg-indigo-600 text-white p-6 rounded-lg hover:bg-indigo-700 transition"
-            >
-              <div className="font-semibold text-lg mb-2">Configure Split</div>
-              <div className="text-indigo-100 text-sm">
-                Set up automatic money allocation rules
-              </div>
-            </Link>
-            <Link
-              href="/dashboard"
-              className="bg-purple-600 text-white p-6 rounded-lg hover:bg-purple-700 transition"
-            >
-              <div className="font-semibold text-lg mb-2">View Dashboard</div>
-              <div className="text-purple-100 text-sm">
-                See your new Money Split widget and financial insights
-              </div>
-            </Link>
-          </div>
-        </div>
-      </section >
+      <Hero/>
 
       {/* FAQ Section */}
       < FAQSection />
