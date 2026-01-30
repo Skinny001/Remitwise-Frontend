@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ArrowLeft, TrendingUp, TrendingDown, DollarSign, PiggyBank } from 'lucide-react'
+import CurrentMoneySplitWidget from '@/components/CurrentMoneySplitWidget'
 
 export default function Dashboard() {
   return (
@@ -50,19 +51,9 @@ export default function Dashboard() {
         </div>
 
         {/* Money Split Visualization */}
-        <div className="bg-white rounded-xl shadow-md p-6 mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Current Money Split</h2>
-          <div className="space-y-4">
-            <SplitBar label="Daily Spending" amount={150} percentage={50} color="bg-blue-500" />
-            <SplitBar label="Savings" amount={90} percentage={30} color="bg-green-500" />
-            <SplitBar label="Bills" amount={45} percentage={15} color="bg-yellow-500" />
-            <SplitBar label="Insurance" amount={15} percentage={5} color="bg-purple-500" />
-          </div>
-          <div className="mt-6">
-            <Link href="/split" className="text-blue-600 hover:text-blue-700 font-semibold">
-              Configure Split Settings →
-            </Link>
-          </div>
+        {/* Money Split Visualization */}
+        <div className="mb-8">
+          <CurrentMoneySplitWidget />
         </div>
 
         {/* Recent Transactions */}
@@ -138,19 +129,7 @@ function StatCard({ title, value, change, icon, trend }: { title: string, value:
   )
 }
 
-function SplitBar({ label, amount, percentage, color }: { label: string, amount: number, percentage: number, color: string }) {
-  return (
-    <div>
-      <div className="flex justify-between mb-2">
-        <span className="text-gray-700 font-medium">{label}</span>
-        <span className="text-gray-900 font-semibold">${amount} ({percentage}%)</span>
-      </div>
-      <div className="w-full bg-gray-200 rounded-full h-3">
-        <div className={`${color} h-3 rounded-full`} style={{ width: `${percentage}%` }}></div>
-      </div>
-    </div>
-  )
-}
+
 
 function TransactionItem({ date, description, amount, status }: { date: string, description: string, amount: string, status: string }) {
   return (
@@ -169,7 +148,7 @@ function TransactionItem({ date, description, amount, status }: { date: string, 
 
 function GoalProgress({ name, current, target, deadline }: { name: string, current: number, target: number, deadline: string }) {
   const percentage = Math.min((current / target) * 100, 100)
-  
+
   return (
     <div>
       <div className="flex justify-between mb-2">
