@@ -1,6 +1,7 @@
 'use client'
 
 import { CheckCircle, Clock, AlertCircle } from 'lucide-react'
+import { UnpaidBillsSection } from '@/components/Bills/UnpaidBillsSection'
 import PageHeader from '@/components/PageHeader'
 import BillPaymentsStatsCards from './components/BillPaymentsStatsCards'
 
@@ -24,31 +25,8 @@ export default function Bills() {
         </section>
 
         {/* Unpaid Bills */}
-        <div className="mb-8">
-          <h2 className="text-xl font-bold text-white mb-4">Unpaid Bills</h2>
-          <div className="space-y-4">
-            <BillCard
-              name="Electricity"
-              amount={50}
-              dueDate="2024-01-20"
-              recurring={true}
-              status="pending"
-            />
-            <BillCard
-              name="School Fees"
-              amount={100}
-              dueDate="2024-01-25"
-              recurring={false}
-              status="pending"
-            />
-            <BillCard
-              name="Rent"
-              amount={200}
-              dueDate="2024-02-01"
-              recurring={true}
-              status="pending"
-            />
-          </div>
+        <div className="">
+          <UnpaidBillsSection />
         </div>
 
         {/* Paid Bills */}
