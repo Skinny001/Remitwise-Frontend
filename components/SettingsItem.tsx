@@ -14,7 +14,7 @@ interface SettingsItemProps {
   onToggle?: (enabled: boolean) => void;
   onClick?: () => void;
   /** Styling variants; default preserves existing look. */
-  variant?: "default" | "notification-row";
+  variant?: "default" | "notification-row" | "security-row";
   /** When using notification-row, set true to draw a divider under the row. */
   divider?: boolean;
 }
@@ -36,7 +36,7 @@ export default function SettingsItem({
   if (isNotificationRow) {
     return (
       <div
-        className={`flex items-center justify-between border border-[#FFFFFF14] h-[77px] p-3 sm:p-4 transition-colors hover:bg-zinc-800/50 ${
+        className={`flex items-center justify-between border border-[#FFFFFF14] h-[77px] p-3 sm:p-4 transition-colors bg-zinc-800/50 ${
           divider ? "border-b border-zinc-800" : ""
         } ${type !== "toggle" && onClick ? "cursor-pointer" : ""}`}
         onClick={type !== "toggle" ? onClick : undefined}
