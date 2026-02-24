@@ -60,7 +60,7 @@
   - **Property 5: Error Response Structure**
   - **Validates: Requirements 6.1, 6.3**
 
-- [ ] 6. Implement POST /api/goals endpoint
+- [x] 6. Implement POST /api/goals endpoint
   - Create `app/api/goals/route.ts` file
   - Implement POST handler with request body parsing
   - Add validation for name, targetAmount, and targetDate
@@ -69,7 +69,7 @@
   - Add error handling with appropriate status codes
   - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5_
 
-- [ ] 7. Implement POST /api/goals/[id]/add endpoint
+- [x] 7. Implement POST /api/goals/[id]/add endpoint
   - Create `app/api/goals/[id]/add/route.ts` file
   - Implement POST handler with request body parsing
   - Add validation for amount parameter
@@ -78,7 +78,7 @@
   - Add error handling with appropriate status codes
   - _Requirements: 2.1, 2.2, 2.3, 2.4, 2.5_
 
-- [ ] 8. Implement POST /api/goals/[id]/withdraw endpoint
+- [x] 8. Implement POST /api/goals/[id]/withdraw endpoint
   - Create `app/api/goals/[id]/withdraw/route.ts` file
   - Implement POST handler with request body parsing
   - Add validation for amount parameter
