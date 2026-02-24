@@ -195,6 +195,50 @@ RemitWise uses wallet-based authentication with the following flow:
 
 **Protected Routes**: All `/api/transactions/*`, `/api/contracts/*` endpoints require valid session.
 
+### Contract IDs and Deployment
+
+The application interacts with the following Soroban smart contracts on Stellar:
+
+| Contract | Purpose | Environment Variable |
+|----------|---------|---------------------|
+| Remittance Split | Automatic money allocation | `NEXT_PUBLIC_REMITTANCE_SPLIT_CONTRACT_ID` |
+| Savings Goals | Goal-based savings management | `NEXT_PUBLIC_SAVINGS_GOALS_CONTRACT_ID` |
+| Bill Payments | Bill tracking and payments | `NEXT_PUBLIC_BILL_PAYMENTS_CONTRACT_ID` |
+| Insurance | Micro-insurance policies | `NEXT_PUBLIC_INSURANCE_CONTRACT_ID` |
+| Family Wallet | Family member management | `NEXT_PUBLIC_FAMILY_WALLET_CONTRACT_ID` |
+
+**Deployment Notes:**
+- Contracts must be deployed to Stellar testnet/mainnet before use
+- Update contract IDs in `.env.local` after deployment
+- Verify contract addresses match network (testnet vs mainnet)
+- Contract ABIs are included in `lib/contracts/` directory
+
+### Health and Monitoring
+
+**Health Check Endpoint**: `GET /api/health`
+
+Returns system status and connectivity:
+
+```json
+{
+  "status": "healthy",
+  "timestamp": "2024-02-24T10:30:00Z",
+  "services": {
+    "stellar": "connected",
+    "contracts": "available",
+    "database": "connected"
+  },
+  "version": "0.1.0"
+}
+```
+
+**Monitoring Recommendations:**
+- Set up uptime monitoring for `/api/health`
+- Monitor API response times and error rates
+- Track Stellar network connectivity
+- Log contract interaction failures
+- Set alerts for authentication failures
+
 ## Design Notes
 
 - All forms are currently disabled (placeholders)
