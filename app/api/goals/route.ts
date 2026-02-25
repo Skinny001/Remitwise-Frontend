@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { withAuth } from '@/lib/auth';
+
 import { validatePaginationParams, paginateData, PaginatedResult } from '../../../lib/utils/pagination';
 import { buildCreateGoalTx } from '@/lib/contracts/savings-goals';
-import { getSessionFromRequest, getPublicKeyFromSession } from '@/lib/auth/session';
 import {
   createValidationError,
-  createAuthenticationError,
   handleUnexpectedError
 } from '@/lib/errors/api-errors';
 import {
@@ -14,8 +14,7 @@ import {
 } from '@/lib/validation/savings-goals';
 import { ApiSuccessResponse } from '@/lib/types/savings-goals';
 
-
-// Mock data structure for goals - replace with DB/contract later
+// ===== Goal Interface & Mock Data =====
 interface Goal {
   id: string;
   title: string;
@@ -26,21 +25,14 @@ interface Goal {
   updatedAt: string;
 }
 
-// Temporary mock data
 const mockGoals: Goal[] = [
   { id: '1', title: 'Emergency Fund', targetAmount: 10000, currentAmount: 4500, deadline: '2024-12-31', createdAt: '2023-01-15', updatedAt: '2023-06-20' },
   { id: '2', title: 'Vacation Trip', targetAmount: 5000, currentAmount: 1200, deadline: '2024-08-15', createdAt: '2023-03-10', updatedAt: '2023-07-01' },
   { id: '3', title: 'New Car', targetAmount: 25000, currentAmount: 8000, deadline: '2025-06-30', createdAt: '2023-02-20', updatedAt: '2023-08-15' },
-  { id: '4', title: 'Home Down Payment', targetAmount: 50000, currentAmount: 15000, deadline: '2026-12-31', createdAt: '2023-01-01', updatedAt: '2023-09-10' },
-  { id: '5', title: 'Education Fund', targetAmount: 20000, currentAmount: 7500, deadline: '2025-09-01', createdAt: '2023-04-05', updatedAt: '2023-10-05' },
-  { id: '6', title: 'Wedding Savings', targetAmount: 15000, currentAmount: 3000, deadline: '2025-05-20', createdAt: '2023-05-12', updatedAt: '2023-11-15' },
-  { id: '7', title: 'Retirement Fund', targetAmount: 100000, currentAmount: 25000, deadline: '2040-12-31', createdAt: '2023-01-01', updatedAt: '2023-12-01' },
-  { id: '8', title: 'Business Investment', targetAmount: 30000, currentAmount: 5000, deadline: '2024-11-30', createdAt: '2023-06-01', updatedAt: '2023-12-10' },
 ];
 
-
-// ✅ GET /api/goals → Paginated goals
-export async function GET(request: NextRequest) {
+// ===== Auth-wrapped GET =====
+async function getHandler(request: NextRequest, session: string) {
   try {
     const url = new URL(request.url);
     const limitParam = url.searchParams.get('limit');
@@ -67,22 +59,9 @@ export async function GET(request: NextRequest) {
   }
 }
 
-
-// ✅ POST /api/goals → Create goal (real implementation)
-export async function POST(request: NextRequest) {
+// ===== Auth-wrapped POST =====
+async function postHandler(request: NextRequest, session: string) {
   try {
-    const session = getSessionFromRequest(request);
-    if (!session) {
-      return createAuthenticationError('Authentication required', 'Please provide a valid session');
-    }
-
-    let publicKey: string;
-    try {
-      publicKey = getPublicKeyFromSession(session);
-    } catch {
-      return createAuthenticationError('Invalid session', 'Session does not contain a valid public key');
-    }
-
     let body;
     try {
       body = await request.json();
@@ -116,7 +95,8 @@ export async function POST(request: NextRequest) {
       return createValidationError('Invalid target date', dateValidation.error);
     }
 
-    const result = await buildCreateGoalTx(publicKey, name, targetAmount, targetDate);
+    // session already validated by withAuth → use as publicKey
+    const result = await buildCreateGoalTx(session, name, targetAmount, targetDate);
 
     const response: ApiSuccessResponse = { xdr: result.xdr };
 
@@ -126,3 +106,6 @@ export async function POST(request: NextRequest) {
     return handleUnexpectedError(error);
   }
 }
+
+export const GET = withAuth(getHandler);
+export const POST = withAuth(postHandler);
