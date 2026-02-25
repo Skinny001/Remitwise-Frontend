@@ -155,6 +155,8 @@ See [API Routes Documentation](./docs/API_ROUTES.md) for details on authenticati
    - Integrate with anchor platform APIs for fiat on/off-ramps
    - Handle deposit/withdrawal flows
    - Process exchange rate quotes
+   - **Environment Setup:** Set `ANCHOR_API_BASE_URL` in your `.env` file (see `.env.example`).
+   - **Frontend API Endpoint:** Use `GET /api/anchor/rates` to fetch cached exchange rates with fallback support.
 
 4. **Transaction Tracking**
    - Display on-chain transaction history
