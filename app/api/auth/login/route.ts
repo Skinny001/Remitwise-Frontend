@@ -44,9 +44,9 @@ export async function POST(request: Request) {
     // Verify signature
     try {
       const keypair = Keypair.fromPublicKey(address);
-      // Nonce is stored as hex string; signature is base64 from the client.
+      // Nonce is verified using utf8 encoding to match the frontend signature
       const isValid = keypair.verify(
-        Buffer.from(nonce, 'hex'),
+        Buffer.from(nonce, 'utf8'),
         Buffer.from(signature, 'base64')
       );
 
