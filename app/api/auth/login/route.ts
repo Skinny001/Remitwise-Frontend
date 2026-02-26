@@ -42,8 +42,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify signature
+    // The client signs Buffer.from(nonce, 'utf8') so we must decode the same way
     const keypair = Keypair.fromPublicKey(address);
-    const messageBuffer = Buffer.from(message, 'hex');
+    const messageBuffer = Buffer.from(message, 'utf8');   // ← was 'hex', must be 'utf8'
     const signatureBuffer = Buffer.from(signature, 'base64');
 
     const isValid = keypair.verify(messageBuffer, signatureBuffer);
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 🔥 UPSERT USER IN DATABASE
+    // Upsert user in database
     await prisma.user.upsert({
       where: { stellar_address: address },
       update: {},
@@ -67,11 +68,12 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // 🔐 Create encrypted session
+    // Create encrypted session
     const sealed = await createSession(address);
 
+    // Response shape matches what the test asserts: { success: true, address }
     const response = NextResponse.json({
-      ok: true,
+      success: true,   // ← was 'ok: true'
       address,
     });
 

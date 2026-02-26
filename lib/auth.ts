@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "./session";
+import { NextRequest } from "next/server";
+import { getSession } from "@/lib/session";
 
 /**
  * Structured API error for consistent error responses.
@@ -15,9 +15,7 @@ export class ApiError extends Error {
 }
 
 /**
- * Validates the Authorization header.
- * Expects:  Authorization: Bearer <token>
- * The token is checked against the AUTH_SECRET env variable.
+ * Validates Bearer token against AUTH_SECRET
  */
 export function validateAuth(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization") ?? "";
@@ -29,6 +27,9 @@ export function validateAuth(request: NextRequest): boolean {
   return token === process.env.AUTH_SECRET;
 }
 
+/**
+ * Standard unauthorized JSON response
+ */
 export function unauthorizedResponse() {
   return new Response(JSON.stringify({ error: "Unauthorized" }), {
     status: 401,
@@ -36,69 +37,49 @@ export function unauthorizedResponse() {
   });
 }
 
-import { NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
-
-type NextHandler = (req: NextRequest, address: string) => Promise<NextResponse>;
-
-export function withAuth(handler: NextHandler) {
-  return async (req: NextRequest) => {
-
-    const session = await getSession();
-      if (!session?.address) {
-        return NextResponse.json(
-          { error: 'Unauthorized', message: 'Not authenticated' },
-          { status: 401 }
-        );
-      }
-    
-    return handler(req, session.address);
 /**
  * Higher-order function that wraps a route handler with auth validation.
- * Supports both Bearer token auth and session-based auth from cookies.
- * 
- * Usage:
- *   async function handler(req: NextRequest, session: string) { ... }
- *   export const GET = withAuth(handler);
+ * Supports:
+ *  - Bearer token auth
+ *  - Header-based session (x-user / x-stellar-public-key)
+ *  - Cookie-based session
  */
 export function withAuth(
-  handler: (request: NextRequest, session: string) => Promise<Response> | Response,
+  handler: (request: NextRequest, address: string) => Promise<Response> | Response,
 ) {
   return async (request: NextRequest): Promise<Response> => {
     try {
-      // Try Bearer token auth first
+      // 1️⃣ Bearer token auth
       const authHeader = request.headers.get("authorization") ?? "";
       const token = authHeader.startsWith("Bearer ")
         ? authHeader.slice(7).trim()
         : null;
 
-      // Check if token is valid (either matches AUTH_SECRET or is a valid session)
       if (token && token === process.env.AUTH_SECRET) {
         return await handler(request, token);
       }
 
-      // Check for session headers (backward compatibility)
-      const sessionHeader = request.headers.get('x-user') ?? request.headers.get('x-stellar-public-key');
-      if (sessionHeader) {
-        return await handler(request, sessionHeader);
+      // 2️⃣ Header-based session
+      const headerAddress =
+        request.headers.get("x-user") ??
+        request.headers.get("x-stellar-public-key");
+
+      if (headerAddress) {
+        return await handler(request, headerAddress);
       }
 
-      // Finally, try cookie-based session
+      // 3️⃣ Cookie-based session
       try {
-        const sessionData = await getSession();
-        if (sessionData?.address) {
-          return await handler(request, sessionData.address);
+        const session = await getSession();
+        if (session?.address) {
+          return await handler(request, session.address);
         }
       } catch (sessionError) {
-        // Session error, continue to unauthorized response
         console.debug("Session retrieval failed:", sessionError);
       }
 
-      // No valid authentication found
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { "Content-Type": "application/json" },
-      });
+      // ❌ Unauthorized
+      return unauthorizedResponse();
     } catch (error) {
       if (error instanceof ApiError) {
         return new Response(JSON.stringify({ error: error.message }), {
@@ -107,19 +88,11 @@ export function withAuth(
         });
       }
 
-      // Log unexpected errors but don't expose details
       console.error("Route handler error:", error);
       return new Response(JSON.stringify({ error: "Internal server error" }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       });
-    if (!session?.address) {
-      return NextResponse.json(
-        { error: 'Unauthorized', message: 'Not authenticated' },
-        { status: 401 }
-      );
     }
-
-    return handler(req, session.address);
   };
 }
