@@ -1,4 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { Keypair } from '@stellar/stellar-sdk';
+import { getAndClearNonce } from '@/lib/auth-cache';
+import {
+  createSession,
+  getSessionCookieHeader,
+} from '@/lib/session';
+
 import { Keypair, StrKey } from '@stellar/stellar-sdk';
 import { getNonce, deleteNonce } from '@/lib/auth/nonce-store';
 
@@ -14,6 +21,17 @@ export const runtime = 'nodejs';
  * - address: Stellar public key
  * - message: The nonce that was signed
  * - signature: Base64-encoded signature
+ */
+
+export const dynamic = 'force-dynamic';
+
+/**
+ * Wallet-based auth flow:
+ * 1. Frontend: user connects wallet (e.g. Freighter), gets address.
+ * 2. Frontend: GET /api/auth/nonce?address={address} to get a random nonce.
+ * 3. Frontend: sign the hex nonce with wallet, encode as base64.
+ * 4. Frontend: POST /api/auth/login with { address, signature }.
+ * 5. Backend: verify signature with Keypair; create encrypted session cookie.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -80,6 +98,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const sealed = await createSession(address);
+    const cookieHeader = getSessionCookieHeader(sealed);
+
+    return new Response(
+      JSON.stringify({ success: true, address, token: sealed }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Set-Cookie': cookieHeader,
+        },
+      }
+    );
+  } catch (err) {
+    console.error('Login error:', err);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   } catch (error) {
     console.error('Error during login:', error);
     return NextResponse.json(

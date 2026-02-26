@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
 // Internal function to handle the business logic
 async function handleAnchorEvent(payload: any) {
-  const { event_type, transaction_id, status } = payload
+  const { event_type, transaction_id } = payload
 
   console.log(
     `[Webhook] Processing event: ${event_type} for tx: ${transaction_id}`
