@@ -1,84 +1,168 @@
-import { Horizon, Networks, Account, TransactionBuilder, Operation, BASE_FEE, StrKey } from '@stellar/stellar-sdk'
+import {
+  Contract,
+  Horizon,
+  nativeToScVal,
+  scValToNative,
+  xdr,
+} from "@stellar/stellar-sdk";
+import { parseContractError, createNotFoundError, createValidationError, ContractErrorCode } from "@/lib/errors/contract-errors";
 
-const HORIZON_URL = process.env.HORIZON_URL || 'https://horizon-testnet.stellar.org'
-const NETWORK_PASSPHRASE = process.env.NETWORK_PASSPHRASE || Networks.TESTNET
-const server = new Horizon.Server(HORIZON_URL)
+// ── Config ──────────────────────────────────────────────────────────────────
+const SOROBAN_RPC_URL =
+  process.env.SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
+const INSURANCE_CONTRACT_ID = process.env.INSURANCE_CONTRACT_ID ?? "";
+const NETWORK_PASSPHRASE =
+  process.env.STELLAR_NETWORK_PASSPHRASE ??
+  "Test SDF Network ; September 2015";
 
-function validatePublicKey(pk: string) {
+// ── Types ────────────────────────────────────────────────────────────────────
+export interface Policy {
+  id: string;
+  name: string;
+  coverageType: string;
+  monthlyPremium: number;
+  coverageAmount: number;
+  active: boolean;
+  nextPaymentDate: string;
+}
+
+// ── RPC Client ───────────────────────────────────────────────────────────────
+function getRpcServer() {
+  const { rpc } = require("@stellar/stellar-sdk") as {
+    rpc: {
+      Server: new (url: string) => {
+        simulateTransaction: (tx: unknown) => Promise<unknown>;
+      };
+    };
+  };
+  return new rpc.Server(SOROBAN_RPC_URL);
+}
+
+// ── Raw contract call helper ─────────────────────────────────────────────────
+async function callContractView(
+  method: string,
+  args: xdr.ScVal[]
+): Promise<xdr.ScVal> {
+  const { Transaction, TransactionBuilder, Account, BASE_FEE } = await import(
+    "@stellar/stellar-sdk"
+  );
+
+  const contract = new Contract(INSURANCE_CONTRACT_ID);
+  const server = getRpcServer();
+
+  // A "view" simulation doesn't need a real source account funded on-chain;
+  // we use a well-known testnet account as the simulation source.
+  const sourceAccount = new Account(
+    "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
+    "0"
+  );
+
+  const tx = new TransactionBuilder(sourceAccount, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(contract.call(method, ...args))
+    .setTimeout(30)
+    .build();
+
   try {
-    return StrKey.isValidEd25519PublicKey(pk)
-  } catch (e) {
-    return false
+    const result = (await server.simulateTransaction(tx)) as {
+      result?: { retval: xdr.ScVal };
+      error?: string;
+    };
+
+    if (result.error) {
+      throw parseContractError(new Error(`Soroban simulation error: ${result.error}`), {
+        contractId: 'insurance',
+        method
+      });
+    }
+
+    if (!result.result?.retval) {
+      throw parseContractError(new Error(`No return value from contract method: ${method}`), {
+        contractId: 'insurance',
+        method
+      });
+    }
+
+    return result.result.retval;
+  } catch (error) {
+    throw parseContractError(error, {
+      contractId: 'insurance',
+      method
+    });
   }
 }
 
-async function loadAccount(accountId: string) {
-  if (!validatePublicKey(accountId)) throw new Error('invalid-account')
-  return await server.loadAccount(accountId)
+// ── Mapper ───────────────────────────────────────────────────────────────────
+function mapScValToPolicy(raw: unknown): Policy {
+  // The contract is expected to return a map/struct with these keys.
+  // scValToNative converts Soroban ScVal → plain JS object.
+  const obj = scValToNative(raw as xdr.ScVal) as Record<string, unknown>;
+
+  return {
+    id: String(obj.id),
+    name: String(obj.name),
+    coverageType: String(obj.coverage_type ?? obj.coverageType),
+    monthlyPremium: Number(obj.monthly_premium ?? obj.monthlyPremium),
+    coverageAmount: Number(obj.coverage_amount ?? obj.coverageAmount),
+    active: Boolean(obj.active),
+    nextPaymentDate: String(obj.next_payment_date ?? obj.nextPaymentDate),
+  };
 }
 
-export async function buildCreatePolicyTx(owner: string, name: string, coverageType: string, monthlyPremium: number, coverageAmount: number) {
-  if (!validatePublicKey(owner)) throw new Error('invalid-owner')
-  if (!name || typeof name !== 'string') throw new Error('invalid-name')
-  if (!coverageType || typeof coverageType !== 'string') throw new Error('invalid-coverageType')
-  if (!(monthlyPremium > 0)) throw new Error('invalid-monthlyPremium')
-  if (!(coverageAmount > 0)) throw new Error('invalid-coverageAmount')
+// ── Public API ────────────────────────────────────────────────────────────────
 
-  const acctResp = await loadAccount(owner)
-  const source = new Account(owner, acctResp.sequence)
+/**
+ * Fetch a single policy by ID.
+ * Throws a { code: 'NOT_FOUND' } error if the contract returns nothing.
+ */
+export async function getPolicy(id: string): Promise<Policy> {
+  const scVal = await callContractView("get_policy", [
+    nativeToScVal(id, { type: "string" }),
+  ]);
 
-  const txBuilder = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
+  const native = scValToNative(scVal);
+  if (!native) {
+    const err = new Error(`Policy not found: ${id}`) as Error & {
+      code: string;
+    };
+    err.code = "NOT_FOUND";
+    throw err;
+  }
 
-  txBuilder.addOperation(Operation.manageData({ name: 'policy:name', value: name.slice(0, 64) }))
-  txBuilder.addOperation(Operation.manageData({ name: 'policy:coverageType', value: coverageType.slice(0, 64) }))
-  txBuilder.addOperation(Operation.manageData({ name: 'policy:monthlyPremium', value: String(monthlyPremium) }))
-  txBuilder.addOperation(Operation.manageData({ name: 'policy:coverageAmount', value: String(coverageAmount) }))
-
-  const tx = txBuilder.setTimeout(300).build()
-  return tx.toXDR()
+  return mapScValToPolicy(scVal);
 }
 
-export async function buildPayPremiumTx(caller: string, policyId: string) {
-  if (!validatePublicKey(caller)) throw new Error('invalid-caller')
-  if (!policyId) throw new Error('invalid-policyId')
+/**
+ * Fetch all active policies for a given Stellar account address (owner).
+ */
+export async function getActivePolicies(owner: string): Promise<Policy[]> {
+  if (!owner || !/^G[A-Z0-9]{55}$/.test(owner)) {
+    throw Object.assign(new Error("Invalid Stellar address"), { code: "INVALID_ADDRESS" });
+  }
 
-  const acctResp = await loadAccount(caller)
-  const source = new Account(caller, acctResp.sequence)
+  const scVal = await callContractView("get_active_policies", [
+    nativeToScVal(owner, { type: "address" }),
+  ]);
 
-  const txBuilder = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
+  const list = scValToNative(scVal) as unknown[];
+  if (!Array.isArray(list)) return [];
 
-  txBuilder.addOperation(Operation.manageData({ name: `policy:pay:${policyId}`, value: '1' }))
-
-  const tx = txBuilder.setTimeout(300).build()
-  return tx.toXDR()
+  return list.map(mapScValToPolicy);
 }
 
-export async function buildDeactivatePolicyTx(caller: string, policyId: string) {
-  if (!validatePublicKey(caller)) throw new Error('invalid-caller')
-  if (!policyId) throw new Error('invalid-policyId')
+/**
+ * Returns the sum of monthly premiums for all active policies of the owner.
+ */
+export async function getTotalMonthlyPremium(owner: string): Promise<number> {
+  if (!owner || !/^G[A-Z0-9]{55}$/.test(owner)) {
+    throw Object.assign(new Error("Invalid Stellar address"), { code: "INVALID_ADDRESS" });
+  }
 
-  const acctResp = await loadAccount(caller)
-  const source = new Account(caller, acctResp.sequence)
+  const scVal = await callContractView("get_total_monthly_premium", [
+    nativeToScVal(owner, { type: "address" }),
+  ]);
 
-  const txBuilder = new TransactionBuilder(source, {
-    fee: BASE_FEE,
-    networkPassphrase: NETWORK_PASSPHRASE,
-  })
-
-  txBuilder.addOperation(Operation.manageData({ name: `policy:deactivate:${policyId}`, value: '1' }))
-
-  const tx = txBuilder.setTimeout(300).build()
-  return tx.toXDR()
-}
-
-export default {
-  buildCreatePolicyTx,
-  buildPayPremiumTx,
-  buildDeactivatePolicyTx,
+  return Number(scValToNative(scVal));
 }

@@ -1,81 +1,90 @@
-import { NextRequest } from 'next/server';
-import { Keypair } from '@stellar/stellar-sdk';
-import {
-  createSession,
-  getSessionCookieHeader,
-} from '../../../../lib/session';
+import { NextRequest, NextResponse } from 'next/server';
+import { Keypair, StrKey } from '@stellar/stellar-sdk';
+import { getNonce, deleteNonce } from '@/lib/auth/nonce-store';
 
+// Force dynamic rendering for this route
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 /**
- * Wallet-based auth flow:
- * 1. Frontend: user connects wallet (e.g. Freighter), gets address.
- * 2. Frontend: build a nonce message (e.g. "Sign in to Remitwise at {timestamp}").
- * 3. Frontend: sign message with wallet (Keypair.fromSecretKey(secret).sign(Buffer.from(message, 'utf8'))), encode as base64.
- * 4. Frontend: POST /api/auth/login with { address, message, signature } (credentials sent in body; cookie set in response).
- * 5. Backend: verify with Keypair.fromPublicKey(address).verify(messageBuffer, signatureBuffer); create encrypted session cookie.
- * Env: SESSION_PASSWORD (min 32 chars, e.g. openssl rand -base64 32).
+ * POST /api/auth/login
+ * Verify a signature and authenticate user
+ * 
+ * Request Body:
+ * - address: Stellar public key
+ * - message: The nonce that was signed
+ * - signature: Base64-encoded signature
  */
-
-export interface LoginBody {
-  address: string;
-  signature: string;
-  message: string;
-}
-
-function verifyStellarSignature(
-  address: string,
-  message: string,
-  signatureBase64: string
-): boolean {
-  try {
-    const keypair = Keypair.fromPublicKey(address);
-    const data = Buffer.from(message, 'utf8');
-    const signature = Buffer.from(signatureBase64, 'base64');
-    return keypair.verify(data, signature);
-  } catch {
-    return false;
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as LoginBody;
-    const { address, signature, message } = body;
+    const body = await request.json();
+    const { address, message, signature } = body;
 
-    if (!address || !signature || !message) {
-      return Response.json(
-        { error: 'Bad request', message: 'address, signature, and message are required' },
+    if (!address || !message || !signature) {
+      return NextResponse.json(
+        { error: 'Missing required fields: address, message, signature' },
         { status: 400 }
       );
     }
 
-    if (!verifyStellarSignature(address, message, signature)) {
-      return Response.json(
-        { error: 'Unauthorized', message: 'Invalid signature' },
+    // Validate Stellar address format
+    if (!StrKey.isValidEd25519PublicKey(address)) {
+      return NextResponse.json(
+        { error: 'Invalid Stellar address format' },
+        { status: 400 }
+      );
+    }
+
+    // Verify nonce exists and hasn't expired
+    const storedNonce = getNonce(address);
+    if (!storedNonce || storedNonce !== message) {
+      return NextResponse.json(
+        { error: 'Invalid or expired nonce' },
         { status: 401 }
       );
     }
 
-    const sealed = await createSession(address);
-    const cookieHeader = getSessionCookieHeader(sealed);
+    try {
+      // Verify the signature
+      const keypair = Keypair.fromPublicKey(address);
+      const messageBuffer = Buffer.from(message, 'utf8');
+      const signatureBuffer = Buffer.from(signature, 'base64');
 
-    return new Response(
-      JSON.stringify({ ok: true, address }),
-      {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Set-Cookie': cookieHeader,
-        },
+      const isValid = keypair.verify(messageBuffer, signatureBuffer);
+
+      if (!isValid) {
+        return NextResponse.json(
+          { error: 'Invalid signature' },
+          { status: 401 }
+        );
       }
-    );
-  } catch (err) {
-    console.error('Login error:', err);
-    return Response.json(
-      { error: 'Internal server error' },
+
+      // Delete used nonce (one-time use)
+      deleteNonce(address);
+
+      // TODO: Create session/JWT token
+      // const token = await createAuthToken(address);
+
+      // Return success with mock token
+      return NextResponse.json({
+        success: true,
+        token: `mock-jwt-${address.substring(0, 10)}`,
+        address,
+      });
+
+    } catch (verifyError) {
+      console.error('Signature verification error:', verifyError);
+      return NextResponse.json(
+        { error: 'Invalid signature' },
+        { status: 401 }
+      );
+    }
+
+  } catch (error) {
+    console.error('Error during login:', error);
+    return NextResponse.json(
+      { error: 'Internal Server Error' },
       { status: 500 }
     );
   }
 }
-
