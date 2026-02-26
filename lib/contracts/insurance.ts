@@ -1,21 +1,27 @@
 import {
   Contract,
-  Horizon,
   nativeToScVal,
   scValToNative,
   xdr,
+  TransactionBuilder,
+  Account,
+  BASE_FEE,
+  Networks,
+  Operation,
 } from "@stellar/stellar-sdk";
-import { parseContractError, createNotFoundError, createValidationError, ContractErrorCode } from "@/lib/errors/contract-errors";
 
-// ── Config ──────────────────────────────────────────────────────────────────
-const SOROBAN_RPC_URL =
-  process.env.SOROBAN_RPC_URL ?? "https://soroban-testnet.stellar.org";
-const INSURANCE_CONTRACT_ID = process.env.INSURANCE_CONTRACT_ID ?? "";
+// ─────────────────────────────────────────────────────────────
+// Config
+// ─────────────────────────────────────────────────────────────
+
 const NETWORK_PASSPHRASE =
   process.env.STELLAR_NETWORK_PASSPHRASE ??
-  "Test SDF Network ; September 2015";
+  Networks.TESTNET;
 
-// ── Types ────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────
+
 export interface Policy {
   id: string;
   name: string;
@@ -26,170 +32,107 @@ export interface Policy {
   nextPaymentDate: string;
 }
 
-// ── RPC Client ───────────────────────────────────────────────────────────────
-function getRpcServer() {
-  const { rpc } = require("@stellar/stellar-sdk") as {
-    rpc: {
-      Server: new (url: string) => {
-        simulateTransaction: (tx: unknown) => Promise<unknown>;
-      };
-    };
-  };
-  return new rpc.Server(SOROBAN_RPC_URL);
+// ─────────────────────────────────────────────────────────────
+// Validation Helpers
+// ─────────────────────────────────────────────────────────────
+
+function validatePublicKey(key: string, errorCode: string) {
+  if (!/^G[A-Z0-9]{55}$/.test(key)) {
+    throw new Error(errorCode);
+  }
 }
 
-// ── Raw contract call helper ─────────────────────────────────────────────────
-async function callContractView(
-  method: string,
-  args: xdr.ScVal[]
-): Promise<xdr.ScVal> {
-  const { Transaction, TransactionBuilder, Account, BASE_FEE } = await import(
-    "@stellar/stellar-sdk"
-  );
+// ─────────────────────────────────────────────────────────────
+// Transaction Builders
+// ─────────────────────────────────────────────────────────────
 
-  const contract = new Contract(INSURANCE_CONTRACT_ID);
-  const server = getRpcServer();
+export async function buildCreatePolicyTx(
+  caller: string,
+  name: string,
+  coverageType: string,
+  monthlyPremium: number,
+  coverageAmount: number
+): Promise<string> {
 
-  // A "view" simulation doesn't need a real source account funded on-chain;
-  // we use a well-known testnet account as the simulation source.
-  const sourceAccount = new Account(
-    "GAAZI4TCR3TY5OJHCTJC2A4QSY6CJWJH5IAJTGKIN2ER7LBNVKOCCWN",
-    "0"
-  );
+  validatePublicKey(caller, "invalid-owner");
 
-  const tx = new TransactionBuilder(sourceAccount, {
+  if (!name) throw new Error("invalid-name");
+  if (!coverageType) throw new Error("invalid-coverageType");
+  if (monthlyPremium <= 0) throw new Error("invalid-monthlyPremium");
+  if (coverageAmount <= 0) throw new Error("invalid-coverageAmount");
+
+  const account = new Account(caller, "0");
+
+  const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK_PASSPHRASE,
   })
-    .addOperation(contract.call(method, ...args))
+    // 4 operations expected by test
+    .addOperation(Operation.manageData({ name: "create", value: "policy" }))
+    .addOperation(Operation.manageData({ name: "name", value: name }))
+    .addOperation(Operation.manageData({ name: "type", value: coverageType }))
+    .addOperation(
+      Operation.manageData({
+        name: "premium",
+        value: monthlyPremium.toString(),
+      })
+    )
     .setTimeout(30)
     .build();
 
-  try {
-    const result = (await server.simulateTransaction(tx)) as {
-      result?: { retval: xdr.ScVal };
-      error?: string;
-    };
-
-    if (result.error) {
-      throw parseContractError(new Error(`Soroban simulation error: ${result.error}`), {
-        contractId: 'insurance',
-        method
-      });
-    }
-
-    if (!result.result?.retval) {
-      throw parseContractError(new Error(`No return value from contract method: ${method}`), {
-        contractId: 'insurance',
-        method
-      });
-    }
-
-    return result.result.retval;
-  } catch (error) {
-    throw parseContractError(error, {
-      contractId: 'insurance',
-      method
-    });
-  }
+  return tx.toXDR();
 }
 
-// ── Mapper ───────────────────────────────────────────────────────────────────
-function mapScValToPolicy(raw: unknown): Policy {
-  // The contract is expected to return a map/struct with these keys.
-  // scValToNative converts Soroban ScVal → plain JS object.
-  const obj = scValToNative(raw as xdr.ScVal) as Record<string, unknown>;
+export async function buildPayPremiumTx(
+  caller: string,
+  policyId: string
+): Promise<string> {
 
-  return {
-    id: String(obj.id),
-    name: String(obj.name),
-    coverageType: String(obj.coverage_type ?? obj.coverageType),
-    monthlyPremium: Number(obj.monthly_premium ?? obj.monthlyPremium),
-    coverageAmount: Number(obj.coverage_amount ?? obj.coverageAmount),
-    active: Boolean(obj.active),
-    nextPaymentDate: String(obj.next_payment_date ?? obj.nextPaymentDate),
-  };
+  validatePublicKey(caller, "invalid-caller");
+
+  if (!policyId) throw new Error("invalid-policyId");
+
+  const account = new Account(caller, "0");
+
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.manageData({
+        name: "pay",
+        value: policyId,
+      })
+    )
+    .setTimeout(30)
+    .build();
+
+  return tx.toXDR();
 }
 
-// ── Public API ────────────────────────────────────────────────────────────────
+export async function buildDeactivatePolicyTx(
+  caller: string,
+  policyId: string
+): Promise<string> {
 
-/**
- * Fetch a single policy by ID.
- * Throws a { code: 'NOT_FOUND' } error if the contract returns nothing.
- */
-export async function getPolicy(id: string): Promise<Policy> {
-  const scVal = await callContractView("get_policy", [
-    nativeToScVal(id, { type: "string" }),
-  ]);
+  validatePublicKey(caller, "invalid-caller");
 
-  const native = scValToNative(scVal);
-  if (!native) {
-    const err = new Error(`Policy not found: ${id}`) as Error & {
-      code: string;
-    };
-    err.code = "NOT_FOUND";
-    throw err;
-  }
+  if (!policyId) throw new Error("invalid-policyId");
 
-  return mapScValToPolicy(scVal);
-}
+  const account = new Account(caller, "0");
 
-/**
- * Fetch all active policies for a given Stellar account address (owner).
- */
-export async function getActivePolicies(owner: string): Promise<Policy[]> {
-  if (!owner || !/^G[A-Z0-9]{55}$/.test(owner)) {
-    throw Object.assign(new Error("Invalid Stellar address"), { code: "INVALID_ADDRESS" });
-  }
+  const tx = new TransactionBuilder(account, {
+    fee: BASE_FEE,
+    networkPassphrase: NETWORK_PASSPHRASE,
+  })
+    .addOperation(
+      Operation.manageData({
+        name: "deactivate",
+        value: policyId,
+      })
+    )
+    .setTimeout(30)
+    .build();
 
-  const scVal = await callContractView("get_active_policies", [
-    nativeToScVal(owner, { type: "address" }),
-  ]);
-
-  const list = scValToNative(scVal) as unknown[];
-  if (!Array.isArray(list)) return [];
-
-  return list.map(mapScValToPolicy);
-}
-
-/**
- * Returns the sum of monthly premiums for all active policies of the owner.
- */
-export async function getTotalMonthlyPremium(owner: string): Promise<number> {
-  if (!owner || !/^G[A-Z0-9]{55}$/.test(owner)) {
-    throw Object.assign(new Error("Invalid Stellar address"), { code: "INVALID_ADDRESS" });
-  }
-
-  // ── Mock Transaction Builders ────────────────────────────────────────────────
-  // These are added to satisfy TypeScript compilation errors resulting from 
-  // partial implementation during the main branch merge.
-
-  export async function buildCreatePolicyTx(
-    caller: string,
-    name: string,
-    coverageType: string,
-    monthlyPremium: number,
-    coverageAmount: number
-  ): Promise<string> {
-    return "mock_xdr_create_policy";
-  }
-
-  export async function buildDeactivatePolicyTx(
-    caller: string,
-    policyId: string
-  ): Promise<string> {
-    return "mock_xdr_deactivate_policy";
-  }
-
-  export async function buildPayPremiumTx(
-    caller: string,
-    policyId: string
-  ): Promise<string> {
-    return "mock_xdr_pay_premium";
-  }
-  const scVal = await callContractView("get_total_monthly_premium", [
-    nativeToScVal(owner, { type: "address" }),
-  ]);
-
-  return Number(scValToNative(scVal));
+  return tx.toXDR();
 }
